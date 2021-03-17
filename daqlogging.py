@@ -18,29 +18,32 @@ try:
     # DAQmx Configure Code
     DAQmxCreateTask("",byref(vTaskHandle))
     DAQmxCreateTask("",byref(aTaskHandle))
-    DAQmxCreateAIVoltageChan(vTaskHandle,b"Dev1/dmm","",DAQmx_Val_Cfg_Default,-20.0,20.0,DAQmx_Val_Volts,None)
-    DAQmxCreateAICurrentChan(aTaskHandle,b"Dev1/dmm","",DAQmx_Val_Cfg_Default,-2.0,2.0,DAQmx_Val_Amps,DAQmx_Val_Internal, 1, None)
+    
+    DAQmxCreateAIVoltageChan(vTaskHandle,"Dev1/ai0","",DAQmx_Val_Cfg_Default,0.0,20.0,DAQmx_Val_Volts,None)
+    DAQmxCreateAICurrentChan(aTaskHandle,"Dev1/dmm","",DAQmx_Val_Cfg_Default,-2.0,2.0,DAQmx_Val_Amps,DAQmx_Val_Internal, 1, None)
 
     voltage = float64()
     current = float64()
 
-    for _ in range(num_samples) :
-        # DAQmx Start Code
-        DAQmxStartTask(vTaskHandle)
+    # DAQmx Start Code
+    DAQmxStartTask(vTaskHandle)
+    DAQmxStartTask(aTaskHandle)
 
-        # DAQmx Read Code
+    for _ in range(num_samples) :
+
+        # Read single voltage value
         #DAQmxReadAnalogF64(vTaskHandle,1,10.0,DAQmx_Val_GroupByChannel,vdata,1000,byref(vRead),None)
         DAQmxReadAnalogScalarF64(vTaskHandle, timeout=2, value=byref(voltage), reserved=None)
-        DAQmxStopTask(vTaskHandle)
-
-        DAQmxStartTask(aTaskHandle)
+        
+        # Read single current value
         #DAQmxReadAnalogF64(aTaskHandle,1,10.0,DAQmx_Val_GroupByChannel,adata,1000,byref(aRead),None)
         DAQmxReadAnalogScalarF64(aTaskHandle, timeout=2, value=byref(current), reserved=None)
 
-        DAQmxStopTask(aTaskHandle)
         print(f"V={voltage.value:.2f}V, I={current.value:.5f}A")
         dataPoints.append((datetime.now(), voltage.value, current.value))
 
+    DAQmxStopTask(vTaskHandle)
+    DAQmxStopTask(aTaskHandle)
     DAQmxClearTask(vTaskHandle)
     DAQmxClearTask(aTaskHandle)
 
