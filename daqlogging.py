@@ -1,67 +1,91 @@
 from PyDAQmx import *
 from ctypes import *
-import numpy
+import numpy as np
 from datetime import datetime
+from sys import argv
+import queue
+import threading
 
-num_samples = 10
-logfile = f"V+I {datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}.txt"
+data_queue = queue.Queue(maxsize=300)
 
-# Declaration of variable passed by reference
-vTaskHandle = TaskHandle()
-aTaskHandle = TaskHandle()
-vRead = int32()
-aRead = int32()
+voltage_averaging = 10
 
-dataPoints = []     # list of tuples of (datetime, voltage, current)
+def threaded_logging(logfile) :
 
-try:
-    # DAQmx Configure Code
-    DAQmxCreateTask("",byref(vTaskHandle))
-    DAQmxCreateTask("",byref(aTaskHandle))
+    print("Logger started")
+
+    with open(logfile, "w+") as f:
+        f.write("Time\tVoltage (V)\tCurrent (A)\n")
+
+    while True :
+        data = data_queue.get()
+        with open(logfile, "a") as f:
+            f.write(f"{data[0].isoformat()}\t{data[1]:.3g}\t{data[2]:.3g}\n")
+
+def main() :
     
-    DAQmxCreateAIVoltageChan(vTaskHandle,"Dev1/ai0","",DAQmx_Val_Cfg_Default,0.0,20.0,DAQmx_Val_Volts,None)
-    DAQmxCreateAICurrentChan(aTaskHandle,"Dev1/dmm","",DAQmx_Val_Cfg_Default,-2.0,2.0,DAQmx_Val_Amps,DAQmx_Val_Internal, 1, None)
+    try :
+        logfile = argv[1]
+        duration = int(argv[2])
+    except Exception :
+        print(f"Usage: python {argv[0]} <name of logfile> <number of seconds to test (integer)>")
+        exit(0)
 
-    voltage = float64()
-    current = float64()
+    num_samples = int(duration*3.48)      # samples occur at roughly 3.48Hz
+    print(f"Taking {num_samples} samples")
 
-    # DAQmx Start Code
-    DAQmxStartTask(vTaskHandle)
-    DAQmxStartTask(aTaskHandle)
+    # Declaration of variable passed by reference
+    vTaskHandle = TaskHandle()
+    aTaskHandle = TaskHandle()
+    vRead = int32()
+    #aRead = int32()
 
-    for _ in range(num_samples) :
+    threading.Thread(target=threaded_logging, args=(logfile,), daemon=True).start()
 
-        # Read single voltage value
-        #DAQmxReadAnalogF64(vTaskHandle,1,10.0,DAQmx_Val_GroupByChannel,vdata,1000,byref(vRead),None)
-        DAQmxReadAnalogScalarF64(vTaskHandle, timeout=2, value=byref(voltage), reserved=None)
+    try:
+        # DAQmx Configure Code
+        DAQmxCreateTask("",byref(vTaskHandle))
+        DAQmxCreateTask("",byref(aTaskHandle))
         
-        # Read single current value
-        #DAQmxReadAnalogF64(aTaskHandle,1,10.0,DAQmx_Val_GroupByChannel,adata,1000,byref(aRead),None)
-        DAQmxReadAnalogScalarF64(aTaskHandle, timeout=2, value=byref(current), reserved=None)
+        DAQmxCreateAIVoltageChan(vTaskHandle,b"Dev1/ai0","",DAQmx_Val_Cfg_Default,-10,10.0,DAQmx_Val_Volts,None)
+        DAQmxCreateAICurrentChan(aTaskHandle,b"Dev1/dmm","",DAQmx_Val_Cfg_Default,-2.0,2.0,DAQmx_Val_Amps,DAQmx_Val_Internal, 1, None)
 
-        print(f"V={voltage.value:.2f}V, I={current.value:.5f}A")
-        dataPoints.append((datetime.now(), voltage.value, current.value))
+        vdata = np.zeros(voltage_averaging, dtype=np.float64)
+        #voltage = float64()
+        current = float64()
 
-    DAQmxStopTask(vTaskHandle)
-    DAQmxStopTask(aTaskHandle)
-    DAQmxClearTask(vTaskHandle)
-    DAQmxClearTask(aTaskHandle)
+        # DAQmx Start Code
+        DAQmxStartTask(vTaskHandle)
+        DAQmxStartTask(aTaskHandle)
 
-except DAQError as err:
-    print("DAQmx Error: %s"%err)
-    if vTaskHandle:
-        # DAQmx Stop Code
+        for _ in range(num_samples) :
+
+            # Read single voltage value
+            DAQmxStopTask(vTaskHandle)
+            DAQmxCfgSampClkTiming(vTaskHandle,"OnboardClock",1.25e6,DAQmx_Val_Rising,DAQmx_Val_FiniteSamps,voltage_averaging)
+            DAQmxStartTask(vTaskHandle)
+            DAQmxReadAnalogF64(vTaskHandle,-1,1.0,DAQmx_Val_GroupByChannel,vdata,voltage_averaging,byref(vRead),None)
+            #DAQmxReadAnalogScalarF64(vTaskHandle, timeout=2, value=byref(voltage), reserved=None)
+            
+            # Read single current value
+            #DAQmxReadAnalogF64(aTaskHandle,1,10.0,DAQmx_Val_GroupByChannel,adata,1000,byref(aRead),None)
+            DAQmxReadAnalogScalarF64(aTaskHandle, timeout=2, value=byref(current), reserved=None)
+            #print(vdata)
+            avg_V = np.average(vdata)
+            print(f"V={avg_V:.3g}V, I={current.value:.3g}A")
+            data_queue.put((datetime.now(), avg_V, current.value))
+
+    except DAQError as err:
+        print("DAQmx Error: %s"%err)
+        
+        raise err
+
+    finally :
+
         DAQmxStopTask(vTaskHandle)
-        DAQmxClearTask(vTaskHandle)
-
-    if aTaskHandle:
-        # DAQmx Stop Code
         DAQmxStopTask(aTaskHandle)
+        DAQmxClearTask(vTaskHandle)
         DAQmxClearTask(aTaskHandle)
-    
-    raise err
 
-with open(logfile, "w+") as f:
-    f.write("Time\tVoltage (V)\tCurrent (A)\n")
-    for line in dataPoints :
-        f.write(f"{line[0].isoformat()}\t{line[1]}\t{line[2]}\n")
+if __name__ == "__main__" :
+    main()
