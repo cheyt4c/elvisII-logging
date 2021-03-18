@@ -43,7 +43,7 @@ current = np.asarray(currents)
 power = voltage*current
 
 print(f"Average power: {np.average(power):.3g}W")
-print(f"Peak power: {np.max(power):.3g}W")
+print(f"Peak power: {np.max(abs(power)):.3g}W")
 
 p1, = host.plot(times, power, label="Power", color="Red")
 p2, = par1.plot(times, voltage, label="Voltage", color="Blue")
