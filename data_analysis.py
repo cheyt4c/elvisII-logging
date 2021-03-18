@@ -3,6 +3,11 @@ from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 
+from scipy.integrate import simps
+
+# power must be above this value to be considered in calculations
+power_cutoff = 0.005    # W
+
 times = []
 voltages = []
 currents = []
@@ -22,6 +27,7 @@ except IndexError as e :
     print(f"Usage: python {argv[0]} <file_to_analyse>")
     exit()
 
+# Read the file
 with open(targetFile, "r") as f :
     f.readline()    # skip heading
 
@@ -40,14 +46,20 @@ with open(targetFile, "r") as f :
 
 voltage = np.asarray(voltages)
 current = np.asarray(currents)
+time = np.asarray(times)
 power = voltage*current
 
-print(f"Average power: {np.average(power):.3g}W")
-print(f"Peak power: {np.max(abs(power)):.3g}W")
+filtered_power = power[power > power_cutoff]
+filtered_time = time[power > power_cutoff]
 
-p1, = host.plot(times, power, label="Power", color="Red")
-p2, = par1.plot(times, voltage, label="Voltage", color="Blue")
-p3, = par2.plot(times, current, label="Current", color="Green")
+print(f"Average power: {np.average(filtered_power):.3g}W")
+print(f"Peak power: {np.max(abs(power)):.3g}W")
+print(f"Total energy: {simps(filtered_power, filtered_time):.4g}Ws")
+
+# Finish doing the plot
+p1, = host.plot(time, power, label="Power", color="Blue")
+p2, = par1.plot(time, voltage, label="Voltage", color="Red")
+p3, = par2.plot(time, current, label="Current", color="Green")
 
 host.legend(handles=[p1,p2,p3], loc='best')
 par2.spines['right'].set_position(('outward', 60))
@@ -58,7 +70,4 @@ par2.yaxis.label.set_color(p3.get_color())
 
 fig.tight_layout()
 
-# plt.legend()
-# plt.xlabel("Time (s)")
-# plt.ylabel("Power (W)")
 plt.show()
