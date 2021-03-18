@@ -50,16 +50,19 @@ time = np.asarray(times)
 power = voltage*current
 
 filtered_power = power[power > power_cutoff]
+filtered_voltage = voltage[power > power_cutoff]
+filtered_current = current[power > power_cutoff]
 filtered_time = time[power > power_cutoff]
 
-print(f"Average power: {np.average(filtered_power):.3g}W")
-print(f"Peak power: {np.max(abs(power)):.3g}W")
-print(f"Total energy: {simps(filtered_power, filtered_time):.4g}Ws")
+print(f"Avg, peak power:\t{np.average(filtered_power):.3g}, {np.max(abs(power)):.3g} W")
+print(f"Avg, peak voltage:\t{np.average(filtered_voltage):.3g}, {np.max(abs(voltage)):.3g} V")
+print(f"Avg, peak current:\t{np.average(filtered_current):.3g}, {np.max(abs(current)):.3g} A")
+print(f"Total energy:\t{simps(filtered_power, filtered_time):.3g}Ws")
 
 # Finish doing the plot
-p1, = host.plot(time, power, label="Power", color="Blue")
-p2, = par1.plot(time, voltage, label="Voltage", color="Red")
-p3, = par2.plot(time, current, label="Current", color="Green")
+p1, = host.plot(time, power, "-x", label="Power", color="Blue")
+p2, = par1.plot(time, voltage, "-x", label="Voltage", color="Red")
+p3, = par2.plot(time, current, "-x", label="Current", color="Green")
 
 host.legend(handles=[p1,p2,p3], loc='best')
 par2.spines['right'].set_position(('outward', 60))
