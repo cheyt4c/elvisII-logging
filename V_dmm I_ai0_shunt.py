@@ -81,7 +81,7 @@ def main() :
             # Read single voltage value
             DAQmxReadAnalogScalarF64(vTaskHandle, timeout=2, value=byref(voltage), reserved=None)
             
-            avg_I = np.average(adata)
+            avg_I = np.average(adata)/shunt_resistance
             print(f"V={voltage.value:.3g}V, I={avg_I:.3g}A")
             data_queue.put((datetime.now(), voltage.value, avg_I))
 

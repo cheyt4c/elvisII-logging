@@ -73,4 +73,5 @@ par2.yaxis.label.set_color(p3.get_color())
 
 fig.tight_layout()
 
+plt.title(targetFile)
 plt.show()
